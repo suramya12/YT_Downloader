@@ -4,10 +4,11 @@ from PIL import Image
 import os
 
 from ...core.db import DB_INSTANCE as DB
-from ...core.models import QueueItem, Status
+from ...core.models import QueueItem
 from ...core.config import CONFIG
 from ...core.downloader import DownloadManager
 from ..notifier import toast
+from ..utils import status_color
 
 def _fmt_bytes(n: int | None) -> str:
     if not n: return "-"
@@ -60,8 +61,11 @@ class QueueCard(ctk.CTkFrame):
         self.pbar.set(progress)
         self.pbar.grid(row=2, column=1, sticky="ew", padx=(0,6), pady=(0,8))
 
-        stats = f"{_fmt_bytes(got)} / {_fmt_bytes(total)}   •   {item.status}   •   {_fmt_speed(item.speed)}   •   ETA {_fmt_eta(item.eta)}"
-        self.stats_lbl = ctk.CTkLabel(self, text=stats)
+        stats = (
+            f"{_fmt_bytes(got)} / {_fmt_bytes(total)} "
+            f"({progress*100:.1f}%)   •   {item.status}   •   {_fmt_speed(item.speed)}   •   ETA {_fmt_eta(item.eta)}"
+        )
+        self.stats_lbl = ctk.CTkLabel(self, text=stats, text_color=status_color(item.status))
         self.stats_lbl.grid(row=3, column=1, sticky="w", padx=(0,6), pady=(0,8))
 
         btns = ctk.CTkFrame(self, fg_color="transparent")
@@ -80,8 +84,11 @@ class QueueCard(ctk.CTkFrame):
         got = item.downloaded_bytes or 0
         progress = (got / total) if total else 0
         self.pbar.set(progress)
-        stats = f"{_fmt_bytes(got)} / {_fmt_bytes(total)}   •   {item.status}   •   {_fmt_speed(item.speed)}   •   ETA {_fmt_eta(item.eta)}"
-        self.stats_lbl.configure(text=stats)
+        stats = (
+            f"{_fmt_bytes(got)} / {_fmt_bytes(total)} "
+            f"({progress*100:.1f}%)   •   {item.status}   •   {_fmt_speed(item.speed)}   •   ETA {_fmt_eta(item.eta)}"
+        )
+        self.stats_lbl.configure(text=stats, text_color=status_color(item.status))
 
 class QueueView(ctk.CTkFrame):
     def __init__(self, master, dm: DownloadManager):

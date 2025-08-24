@@ -3,7 +3,7 @@ import customtkinter as ctk
 from tkinter import filedialog
 import csv, json, os, subprocess, sys
 from ...core.db import DB_INSTANCE as DB
-from ...core.models import Status
+from ..utils import status_color
 
 def _open_in_folder(path: str):
     if not path: return
@@ -45,7 +45,11 @@ class HistoryView(ctk.CTkFrame):
         for r, item in enumerate(self._rows_data(), start=1):
             ctk.CTkLabel(self.scroll, text=str(item.id)).grid(row=r, column=0, padx=4, pady=2, sticky="w")
             ctk.CTkLabel(self.scroll, text=item.title or "-").grid(row=r, column=1, padx=4, pady=2, sticky="w")
-            ctk.CTkLabel(self.scroll, text=item.status).grid(row=r, column=2, padx=4, pady=2, sticky="w")
+            ctk.CTkLabel(
+                self.scroll,
+                text=item.status,
+                text_color=status_color(item.status),
+            ).grid(row=r, column=2, padx=4, pady=2, sticky="w")
             ctk.CTkButton(self.scroll, text="Show in Folder", command=lambda p=item.filepath: _open_in_folder(p)).grid(row=r, column=3, padx=4, pady=2, sticky="w")
 
     def export_json(self):
