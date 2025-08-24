@@ -131,6 +131,10 @@ class DownloadManager:
                 "User-Agent": CONFIG.settings.user_agent,
                 "Referer": "https://www.youtube.com/",
             },
+            "extractor_args": {
+                "youtube": {"player_client": [CONFIG.settings.player_client]}
+            },
+
         }
         if CONFIG.settings.cookies_file:
             opts["cookiefile"] = CONFIG.settings.cookies_file
