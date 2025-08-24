@@ -24,6 +24,7 @@ class Settings(BaseModel):
     player_client: str = "web"
 
 
+
 class Config:
     def __init__(self) -> None:
         self.config_dir = Path(user_config_dir(APP_NAME, APP_AUTHOR))
