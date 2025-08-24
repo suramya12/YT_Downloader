@@ -13,7 +13,8 @@ license = {text = "MIT"}
 keywords = ["youtube", "downloader", "yt-dlp", "gui", "customtkinter"]
 
 dependencies = [
-  "yt-dlp>=2025.1.1",
+  # use a released version of yt-dlp so the project installs cleanly
+  "yt-dlp>=2024.3",
   "pydantic>=2.5",
   "platformdirs>=4.2",
   "customtkinter>=5.2",
