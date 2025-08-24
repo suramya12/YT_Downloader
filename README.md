@@ -7,6 +7,7 @@ LiquidGlass Downloader is a cross-platform application for downloading online vi
 - Color‑coded status indicators with percentage progress
 - History export to CSV or JSON
 - Configurable themes, formats and concurrent downloads
+- Optional cookies file and custom User-Agent for restricted videos
 
 ## Installation
 ```bash
