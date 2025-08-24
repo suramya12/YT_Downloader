@@ -26,6 +26,19 @@ class DownloadManager:
         self.exec = ThreadPoolExecutor(max_workers=CONFIG.settings.concurrent_downloads)
         self.controls: Dict[int, _TaskControl] = {}
         self.lock = threading.Lock()
+        self.active_tasks: Dict[int, Any] = {}  # Store active futures
+        
+    def __del__(self):
+        self.cleanup()
+        
+    def cleanup(self):
+        """Clean up resources and cancel pending tasks"""
+        with self.lock:
+            for task_id, future in self.active_tasks.items():
+                if not future.done():
+                    future.cancel()
+            self.active_tasks.clear()
+            self.exec.shutdown(wait=False)
 
     def set_concurrency(self, n: int) -> None:
         if n < 1:
@@ -40,15 +53,40 @@ class DownloadManager:
 
     def queue(self, url: str, fmt: str | None = None) -> int:
         item_id = DB.add_queue_item(url, fmt or CONFIG.settings.format)
-        self.exec.submit(metadata.fetch_and_store, item_id, url)
+        
+        # Submit metadata fetching task
+        with self.lock:
+            future = self.exec.submit(self._fetch_metadata_safe, item_id, url)
+            self.active_tasks[item_id] = future
+            
         log.info("Queued %s -> id %s", url, item_id)
         return item_id
+        
+    def _fetch_metadata_safe(self, item_id: int, url: str):
+        """Safely fetch metadata with error handling"""
+        try:
+            metadata.fetch_and_store(item_id, url)
+        except Exception as e:
+            log.error(f"Error fetching metadata for {url}: {e}")
+            DB.update(item_id, status=Status.ERROR.value, errmsg=f"Metadata error: {str(e)}")
+        finally:
+            with self.lock:
+                self.active_tasks.pop(item_id, None)
 
     def start(self, item_id: int) -> None:
         with self.lock:
+            # Cancel any existing task
+            if item_id in self.active_tasks:
+                self.active_tasks[item_id].cancel()
+            
+            # Create new control and task
             ctl = self.controls.get(item_id) or _TaskControl()
             self.controls[item_id] = ctl
-        self.exec.submit(self._run, item_id, ctl)
+            ctl.cancel.clear()
+            ctl.pause.clear()
+            
+            future = self.exec.submit(self._run, item_id, ctl)
+            self.active_tasks[item_id] = future
 
     def start_all(self) -> None:
         for r in DB.list():
@@ -120,21 +158,39 @@ class DownloadManager:
             "format": "bestaudio/best" if CONFIG.settings.audio_only else fmt,
             "merge_output_format": "mp3" if CONFIG.settings.audio_only else "mp4",
             "continuedl": True,
-            "ignoreerrors": True,
+            "ignoreerrors": False,  # Changed to False to better handle errors
             "noprogress": True,
-            "retries": 3,
-            "fragment_retries": 3,
-            "skip_unavailable_fragments": True,
+            "retries": 5,  # Increased retries
+            "fragment_retries": 5,
+            "retry_sleep": lambda n: 5 * (n + 1),  # Exponential backoff
+            "skip_unavailable_fragments": False,  # Changed to ensure complete downloads
             "progress_hooks": [self._progress_hook(item_id, ctl)],
             "nopart": False,
             "http_headers": {
                 "User-Agent": CONFIG.settings.user_agent,
                 "Referer": "https://www.youtube.com/",
             },
+            "cookiesfrombrowser": (CONFIG.settings.browser_for_cookies,) if CONFIG.settings.use_cookies_from_browser else None,
+            "writethumbnail": True,
+            "verbose": True,
             "extractor_args": {
-                "youtube": {"player_client": [CONFIG.settings.player_client]}
+                "youtube": {
+                    "player_client": ["ios"],  # Force iOS client for better formats
+                    "player_skip": ["webpage", "js"]  # Skip unnecessary downloads
+                }
             },
-
+            "format_sort": [  # Explicit format sorting
+                "res:2160",
+                "res:1440",
+                "res:1080",
+                "res:720",
+                "fps:60",
+                "quality",
+                "codec:h264",
+                "size",
+                "br",
+                "asr"
+            ]
         }
         if CONFIG.settings.cookies_file:
             opts["cookiefile"] = CONFIG.settings.cookies_file
@@ -146,25 +202,70 @@ class DownloadManager:
         row = DB.get(item_id)
         if not row:
             return
+        
         fmt = row.format or CONFIG.settings.format
         postprocessors: list[dict[str, Any]] = []
-        if CONFIG.settings.embed_thumbnail:
-            postprocessors.append({"key": "EmbedThumbnail"})
+        
+        # Always try to embed thumbnail for better quality control
+        postprocessors.append({
+            "key": "EmbedThumbnail",
+            "already_have_thumbnail": False
+        })
+        
         if CONFIG.settings.embed_subtitles:
-            postprocessors.append({"key": "FFmpegEmbedSubtitle"})
+            postprocessors.append({
+                "key": "FFmpegEmbedSubtitle",
+                "already_have_subtitle": False
+            })
+            
+        # Add FFmpeg optimization for better quality
+        postprocessors.append({
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4",
+            "when": "video"
+        })
+        
         ydl_opts = self._build_ydl_opts(item_id, ctl, fmt, postprocessors)
-        try:
-            DB.update(item_id, status=Status.QUEUED.value)
-            with YoutubeDL(ydl_opts) as ydl:
-                ydl.download([row.url])
-            DB.update(item_id, status=Status.COMPLETED.value)
-            log.info("Completed id=%s", item_id)
-        except Exception as e:
-            msg = str(e)
-            log.warning("Task id=%s interrupted: %s", item_id, msg)
-            if "Paused by user" in msg:
-                DB.update(item_id, status=Status.PAUSED.value, errmsg=None)
-            elif "Canceled by user" in msg:
-                DB.update(item_id, status=Status.CANCELED.value, errmsg=None)
-            else:
-                DB.update(item_id, status=Status.ERROR.value, errmsg=msg)
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                DB.update(item_id, status=Status.QUEUED.value)
+                with YoutubeDL(ydl_opts) as ydl:
+                    # Pre-check video availability
+                    info = ydl.extract_info(row.url, download=False)
+                    if not info:
+                        raise Exception("Could not fetch video information")
+                    
+                    # Update title and format information
+                    DB.update(
+                        item_id,
+                        title=info.get('title'),
+                        format=info.get('format_id')
+                    )
+                    
+                    # Actual download
+                    ydl.download([row.url])
+                
+                DB.update(item_id, status=Status.COMPLETED.value)
+                log.info("Completed id=%s", item_id)
+                break  # Success, exit retry loop
+                
+            except Exception as e:
+                msg = str(e)
+                log.warning("Task id=%s attempt %d failed: %s", item_id, retry_count + 1, msg)
+                
+                if "Paused by user" in msg:
+                    DB.update(item_id, status=Status.PAUSED.value, errmsg=None)
+                    break
+                elif "Canceled by user" in msg:
+                    DB.update(item_id, status=Status.CANCELED.value, errmsg=None)
+                    break
+                else:
+                    if retry_count < max_retries - 1:
+                        retry_count += 1
+                        time.sleep(5 * retry_count)  # Exponential backoff
+                        continue
+                    else:
+                        DB.update(item_id, status=Status.ERROR.value, errmsg=f"Failed after {max_retries} attempts: {msg}")

@@ -75,21 +75,28 @@ class App(ctk.CTk):
             self.status.configure(text="Settings")
 
     def _tick(self):
-        self.queue_view.refresh()
-        self.history_view.refresh()
-
-        if CONFIG.settings.clipboard_watch:
-            try:
-                data = self.clipboard_get()
-            except Exception:
-                data = ""
+        try:
+            if CONFIG.settings.clipboard_watch:
+                self.after_idle(self._check_clipboard)
+        except Exception as e:
+            print(f"Error in tick: {e}")
+        finally:
+            self.after(2000, self._tick)
+    
+    def _check_clipboard(self):
+        try:
+            data = self.clipboard_get()
             if data and data != self._last_clipboard and YOUTUBE_URL_RE.search(data):
                 self._last_clipboard = data
-                toast(self, "YouTube link detected. Click 'Add' in Queue.")
-                self.queue_view.url_entry.delete(0, "end")
-                self.queue_view.url_entry.insert(0, data)
-
-        self.after(1000, self._tick)
+                self._handle_clipboard_url(data)
+        except Exception:
+            # Ignore clipboard errors
+            pass
+    
+    def _handle_clipboard_url(self, url):
+        toast(self, "YouTube link detected. Click 'Add' in Queue.")
+        self.queue_view.url_entry.delete(0, "end")
+        self.queue_view.url_entry.insert(0, url)
 
 def main():
     app = App()

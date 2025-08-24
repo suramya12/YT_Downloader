@@ -11,18 +11,32 @@ APP_AUTHOR = "LiquidGlass"
 class Settings(BaseModel):
     download_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads"))
     concurrent_downloads: int = 3
-    format: str = "bv*+ba/best"
+    format: str = (
+        "bestvideo[ext=mp4][height>=2160][fps>=60]+"
+        "bestaudio[ext=m4a][abr>=160]/bestvideo[ext=mp4][height>=2160]+"
+        "bestaudio[ext=m4a][abr>=128]/bestvideo[ext=mp4][height>=1440][fps>=60]+"
+        "bestaudio[ext=m4a][abr>=128]/bestvideo[ext=mp4][height>=1440]+"
+        "bestaudio[ext=m4a][abr>=128]/bestvideo[ext=mp4][height>=1080][fps>=60]+"
+        "bestaudio[ext=m4a][abr>=128]/bestvideo[ext=mp4][height>=1080]+"
+        "bestaudio[ext=m4a][abr>=128]/best[ext=mp4]/best"
+    )
+    preferred_quality: str = "1080p"  # New setting for preferred quality
+    preferred_fps: int = 60  # New setting for preferred FPS
+    audio_quality: str = "best"  # New setting for audio quality
     audio_only: bool = False
-    embed_subtitles: bool = False
+    embed_subtitles: bool = True  # Changed default to True
     embed_thumbnail: bool = True
+    auto_subtitles: bool = True  # New setting for automatic subtitle download
     theme: str = "Dark"
     clipboard_watch: bool = True
     user_agent: str = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"  # iOS User-Agent
     )
     cookies_file: str | None = None
-    player_client: str = "web"
-
+    player_client: str = "web"  # Using web client for better compatibility
+    browser_for_cookies: str = "chrome"  # Options: chrome, firefox, edge, opera, safari, chromium
+    use_cookies_from_browser: bool = True  # Enable browser cookies by default
 
 
 class Config:

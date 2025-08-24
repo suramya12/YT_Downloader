@@ -2,6 +2,7 @@ from __future__ import annotations
 import customtkinter as ctk
 from PIL import Image
 import os
+import threading
 
 from ...core.db import DB_INSTANCE as DB
 from ...core.models import QueueItem
@@ -94,6 +95,8 @@ class QueueView(ctk.CTkFrame):
     def __init__(self, master, dm: DownloadManager):
         super().__init__(master)
         self.dm = dm
+        self.refresh_lock = threading.Lock()
+        self.is_refreshing = False
 
         header = ctk.CTkFrame(self, corner_radius=10)
         header.pack(fill="x", padx=10, pady=(10,6))
@@ -108,7 +111,7 @@ class QueueView(ctk.CTkFrame):
         self.scroll = ctk.CTkScrollableFrame(self, width=940, height=420, corner_radius=8)
         self.scroll.pack(fill="both", expand=True, padx=10, pady=(0,10))
         self.card_widgets = {}
-        self.refresh()
+        self.after(100, self.refresh)
 
     def _add_one(self):
         url = self.url_entry.get().strip()
@@ -131,20 +134,36 @@ class QueueView(ctk.CTkFrame):
     def _cancel_all(self): self.dm.cancel_all()
 
     def refresh(self):
-        items = DB.list()
-        seen = set()
-        row = 0
-        for it in items:
-            seen.add(it.id)
-            card = self.card_widgets.get(it.id)
-            if not card:
-                card = QueueCard(self.scroll, it, self.dm)
-                self.card_widgets[it.id] = card
-            else:
-                card.update_from(it)
-            card.grid(row=row, column=0, sticky="ew", padx=8, pady=6)
-            row += 1
-        for iid in list(self.card_widgets.keys()):
-            if iid not in seen:
-                self.card_widgets[iid].destroy()
-                del self.card_widgets[iid]
+        if self.is_refreshing:
+            return
+        
+        self.is_refreshing = True
+        try:
+            items = DB.list()
+            seen = set()
+            
+            # Update existing cards and identify new ones
+            for it in items:
+                seen.add(it.id)
+                card = self.card_widgets.get(it.id)
+                if card:
+                    card.update_from(it)
+                else:
+                    # Create new card
+                    card = QueueCard(self.scroll, it, self.dm)
+                    self.card_widgets[it.id] = card
+            
+            # Remove old cards
+            for iid in list(self.card_widgets.keys()):
+                if iid not in seen:
+                    self.card_widgets[iid].destroy()
+                    del self.card_widgets[iid]
+            
+            # Re-grid all cards to maintain order
+            for row, it in enumerate(items):
+                card = self.card_widgets.get(it.id)
+                if card:
+                    card.grid(row=row, column=0, sticky="ew", padx=8, pady=6)
+        finally:
+            self.is_refreshing = False
+            self.after(1000, self.refresh)  # Schedule next refresh

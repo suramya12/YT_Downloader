@@ -48,7 +48,11 @@ class SettingsView(ctk.CTkFrame):
         row3.pack(fill="x", padx=10, pady=6)
         self.format_opt = ctk.CTkOptionMenu(
             row3,
-            values=["bv*+ba/best", "bestaudio/best", "best"],
+            values=[
+                "bestvideo[height>=2160]+bestaudio/bestvideo[height>=1440]+bestaudio/bestvideo[height>=1080]+bestaudio/best",
+                "bestvideo[height>=1440]+bestaudio/bestvideo[height>=1080]+bestaudio/best",
+                "bestvideo[height>=1080]+bestaudio/best"
+            ],
             command=self._set_format,
         )
         self.format_opt.set(s.format)
@@ -156,7 +160,13 @@ class SettingsView(ctk.CTkFrame):
         if not messagebox.askyesno("Clear History", "Remove all finished items?"):
             return
         DB.clear_history()
-        self.master.master.history_view.refresh()
+        try:
+            # Get the root window first
+            root = self.winfo_toplevel()
+            if hasattr(root, 'history_view'):
+                root.history_view.refresh()
+        except Exception:
+            pass
         toast(self, "History cleared")
 
     def _reset_app(self):
