@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "liquidglass-downloader"
+version = "2.2.0"
+description = "LiquidGlass YouTube Downloader — polished GUI, cards, metadata, SQLite with migration."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name="You"}]
+license = {text = "MIT"}
+keywords = ["youtube", "downloader", "yt-dlp", "gui", "customtkinter"]
+
+dependencies = [
+  "yt-dlp>=2025.1.1",
+  "pydantic>=2.5",
+  "platformdirs>=4.2",
+  "customtkinter>=5.2",
+  "Pillow>=10.2",
+  "rich>=13.7",
+  "requests>=2.32",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5", "black>=24.2", "mypy>=1.8", "pytest>=8"]
+
+[project.scripts]
+liquidglass-downloader = "liquidglass_downloader.cli:main"
+liquidglass-gui = "liquidglass_downloader.ui.app:main"
