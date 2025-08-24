@@ -83,7 +83,9 @@ class SettingsView(ctk.CTkFrame):
         if not messagebox.askyesno("Clear History", "Remove all finished items?"):
             return
         DB.clear_history()
-        self.master.master.history_view.refresh()
+        # Access the history_view through the app instance
+        app = self.winfo_toplevel()
+        app.history_view.refresh()
         toast(self, "History cleared")
 
     def _reset_app(self):
