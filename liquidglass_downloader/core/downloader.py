@@ -1,8 +1,9 @@
 from __future__ import annotations
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict
+from typing import Dict, Any
 import os
+import time
 
 from yt_dlp import YoutubeDL
 from .config import CONFIG
@@ -13,10 +14,12 @@ from . import metadata
 
 log = get_logger("downloader")
 
+
 class _TaskControl:
     def __init__(self) -> None:
         self.cancel = threading.Event()
         self.pause = threading.Event()
+
 
 class DownloadManager:
     def __init__(self) -> None:
@@ -25,8 +28,10 @@ class DownloadManager:
         self.lock = threading.Lock()
 
     def set_concurrency(self, n: int) -> None:
-        if n < 1: n = 1
-        if n == CONFIG.settings.concurrent_downloads: return
+        if n < 1:
+            n = 1
+        if n == CONFIG.settings.concurrent_downloads:
+            return
         CONFIG.settings.concurrent_downloads = n
         CONFIG.save(CONFIG.settings)
         old = self.exec
@@ -52,7 +57,8 @@ class DownloadManager:
 
     def pause(self, item_id: int) -> None:
         ctl = self.controls.get(item_id)
-        if ctl: ctl.pause.set()
+        if ctl:
+            ctl.pause.set()
 
     def pause_all(self) -> None:
         for r in DB.list():
@@ -60,7 +66,8 @@ class DownloadManager:
 
     def cancel(self, item_id: int) -> None:
         ctl = self.controls.get(item_id)
-        if ctl: ctl.cancel.set()
+        if ctl:
+            ctl.cancel.set()
 
     def cancel_all(self) -> None:
         for r in DB.list():
@@ -71,6 +78,8 @@ class DownloadManager:
         self.start(item_id)
 
     def _progress_hook(self, item_id: int, ctl: _TaskControl):
+        last: dict[str, float] = {"time": 0.0, "downloaded": -1}
+
         def hook(d: dict) -> None:
             if ctl.cancel.is_set():
                 raise Exception("Canceled by user")
@@ -78,41 +87,68 @@ class DownloadManager:
                 raise Exception("Paused by user")
             status = d.get("status")
             if status == "downloading":
-                DB.update(
-                    item_id,
-                    status=Status.DOWNLOADING.value,
-                    downloaded_bytes=d.get("downloaded_bytes"),
-                    total_bytes=d.get("total_bytes") or d.get("total_bytes_estimate"),
-                    speed=d.get("speed"),
-                    eta=d.get("eta"),
-                    title=d.get("info_dict", {}).get("title"),
-                )
+                now = time.time()
+                downloaded = d.get("downloaded_bytes") or 0
+                if downloaded != last["downloaded"] and now - last["time"] > 0.5:
+                    DB.update(
+                        item_id,
+                        status=Status.DOWNLOADING.value,
+                        downloaded_bytes=downloaded,
+                        total_bytes=d.get("total_bytes")
+                        or d.get("total_bytes_estimate"),
+                        speed=d.get("speed"),
+                        eta=d.get("eta"),
+                        title=d.get("info_dict", {}).get("title"),
+                    )
+                    last["time"] = now
+                    last["downloaded"] = downloaded
             elif status == "finished":
-                DB.update(item_id, status=Status.COMPLETED.value, filepath=d.get("filename"))
+                DB.update(
+                    item_id, status=Status.COMPLETED.value, filepath=d.get("filename")
+                )
+
         return hook
 
-    def _run(self, item_id: int, ctl: _TaskControl) -> None:
-        row = DB.get(item_id)
-        if not row: return
-        outtmpl = os.path.join(CONFIG.settings.download_dir, "%(title)s [%(id)s].%(ext)s")
-        fmt = row.format or CONFIG.settings.format
-        postprocessors = []
-        if CONFIG.settings.embed_thumbnail:
-            postprocessors.append({"key": "EmbedThumbnail"})
-        if CONFIG.settings.embed_subtitles:
-            postprocessors.append({"key": "FFmpegEmbedSubtitle"})
-        ydl_opts = {
+    def _build_ydl_opts(
+        self, item_id: int, ctl: _TaskControl, fmt: str, postprocessors: list[dict]
+    ) -> Dict[str, Any]:
+        outtmpl = os.path.join(
+            CONFIG.settings.download_dir, "%(title)s [%(id)s].%(ext)s"
+        )
+        opts: Dict[str, Any] = {
             "outtmpl": outtmpl,
             "format": "bestaudio/best" if CONFIG.settings.audio_only else fmt,
             "merge_output_format": "mp3" if CONFIG.settings.audio_only else "mp4",
             "continuedl": True,
             "ignoreerrors": True,
             "noprogress": True,
+            "retries": 3,
+            "fragment_retries": 3,
+            "skip_unavailable_fragments": True,
             "progress_hooks": [self._progress_hook(item_id, ctl)],
             "nopart": False,
+            "http_headers": {
+                "User-Agent": CONFIG.settings.user_agent,
+                "Referer": "https://www.youtube.com/",
+            },
         }
+        if CONFIG.settings.cookies_file:
+            opts["cookiefile"] = CONFIG.settings.cookies_file
         if postprocessors:
-            ydl_opts["postprocessors"] = postprocessors
+            opts["postprocessors"] = postprocessors
+        return opts
+
+    def _run(self, item_id: int, ctl: _TaskControl) -> None:
+        row = DB.get(item_id)
+        if not row:
+            return
+        fmt = row.format or CONFIG.settings.format
+        postprocessors: list[dict[str, Any]] = []
+        if CONFIG.settings.embed_thumbnail:
+            postprocessors.append({"key": "EmbedThumbnail"})
+        if CONFIG.settings.embed_subtitles:
+            postprocessors.append({"key": "FFmpegEmbedSubtitle"})
+        ydl_opts = self._build_ydl_opts(item_id, ctl, fmt, postprocessors)
         try:
             DB.update(item_id, status=Status.QUEUED.value)
             with YoutubeDL(ydl_opts) as ydl:

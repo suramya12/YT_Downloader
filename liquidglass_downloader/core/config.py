@@ -7,6 +7,7 @@ import json
 APP_NAME = "LiquidGlassDownloader"
 APP_AUTHOR = "LiquidGlass"
 
+
 class Settings(BaseModel):
     download_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads"))
     concurrent_downloads: int = 3
@@ -16,6 +17,11 @@ class Settings(BaseModel):
     embed_thumbnail: bool = True
     theme: str = "Dark"
     clipboard_watch: bool = True
+    user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+    cookies_file: str | None = None
+
 
 class Config:
     def __init__(self) -> None:
@@ -34,7 +40,9 @@ class Config:
     def _load(self) -> Settings:
         if self.config_file.exists():
             try:
-                return Settings(**json.loads(self.config_file.read_text(encoding="utf-8")))
+                return Settings(
+                    **json.loads(self.config_file.read_text(encoding="utf-8"))
+                )
             except Exception:
                 pass
         s = Settings()
@@ -42,7 +50,10 @@ class Config:
         return s
 
     def save(self, settings: Settings) -> None:
-        self.config_file.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
+        self.config_file.write_text(
+            settings.model_dump_json(indent=2), encoding="utf-8"
+        )
         self.settings = settings
+
 
 CONFIG = Config()
