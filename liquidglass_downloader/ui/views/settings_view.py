@@ -1,8 +1,10 @@
 from __future__ import annotations
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from ...core.config import CONFIG
 from ...core.downloader import DownloadManager
+from ...core.db import DB_INSTANCE as DB
+from ..notifier import toast
 
 class SettingsView(ctk.CTkFrame):
     def __init__(self, master, dm: DownloadManager, on_theme_changed):
@@ -53,6 +55,14 @@ class SettingsView(ctk.CTkFrame):
         self.clipboard_watch.select() if s.clipboard_watch else self.clipboard_watch.deselect()
         self.clipboard_watch.pack(side="left", padx=10)
 
+        section4 = ctk.CTkFrame(self, corner_radius=10)
+        section4.pack(fill="x", padx=10, pady=6)
+        ctk.CTkLabel(section4, text="Maintenance", font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=10, pady=(10,4))
+        row5 = ctk.CTkFrame(section4, fg_color="transparent")
+        row5.pack(fill="x", padx=10, pady=6)
+        ctk.CTkButton(row5, text="Clear History", command=self._clear_history).pack(side="left", padx=6)
+        ctk.CTkButton(row5, text="Reset Application", command=self._reset_app).pack(side="left", padx=6)
+
     def change_dir(self):
         fp = filedialog.askdirectory()
         if not fp: return
@@ -68,3 +78,23 @@ class SettingsView(ctk.CTkFrame):
     def _toggle_thumb(self): s=CONFIG.settings; s.embed_thumbnail=not s.embed_thumbnail; CONFIG.save(s)
     def _set_theme(self, val): s=CONFIG.settings; s.theme=val; CONFIG.save(s); self.on_theme_changed(val)
     def _toggle_clipboard(self): s=CONFIG.settings; s.clipboard_watch=not s.clipboard_watch; CONFIG.save(s)
+
+    def _clear_history(self):
+        if not messagebox.askyesno("Clear History", "Remove all finished items?"):
+            return
+        DB.clear_history()
+        self.master.master.history_view.refresh()
+        toast(self, "History cleared")
+
+    def _reset_app(self):
+        if not messagebox.askyesno(
+            "Reset Application",
+            "This will remove all settings and downloads and restart. Continue?",
+        ):
+            return
+        self.dm.cancel_all()
+        import shutil, sys, os
+        shutil.rmtree(CONFIG.config_dir, ignore_errors=True)
+        shutil.rmtree(CONFIG.data_dir, ignore_errors=True)
+        python = sys.executable
+        os.execl(python, python, "-m", "liquidglass_downloader.ui.app")
