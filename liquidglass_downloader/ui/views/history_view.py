@@ -1,9 +1,10 @@
 from __future__ import annotations
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import csv, json, os, subprocess, sys
 from ...core.db import DB_INSTANCE as DB
 from ..utils import status_color
+from ..notifier import toast
 
 def _open_in_folder(path: str):
     if not path: return
@@ -22,6 +23,7 @@ class HistoryView(ctk.CTkFrame):
         self.search_entry = ctk.CTkEntry(bar, width=420, placeholder_text="Search title/url/path...")
         self.search_entry.pack(side="left", padx=10, pady=10)
         self.search_entry.bind("<KeyRelease>", lambda e: self.refresh())
+        ctk.CTkButton(bar, text="Clear History", command=self.clear_history).pack(side="right", padx=6, pady=10)
         ctk.CTkButton(bar, text="Export JSON", command=self.export_json).pack(side="right", padx=6, pady=10)
         ctk.CTkButton(bar, text="Export CSV", command=self.export_csv).pack(side="right", padx=6, pady=10)
 
@@ -67,3 +69,10 @@ class HistoryView(ctk.CTkFrame):
             w = csv.writer(f); w.writerow(["id","url","title","status","filepath"])
             for r in rows:
                 w.writerow([r.id, r.url, r.title, r.status, r.filepath or ""])
+
+    def clear_history(self):
+        if not messagebox.askyesno("Clear History", "Remove all finished items?"):
+            return
+        DB.clear_history()
+        self.refresh()
+        toast(self, "History cleared")

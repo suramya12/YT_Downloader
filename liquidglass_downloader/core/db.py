@@ -132,4 +132,16 @@ class DB:
             con.execute("UPDATE downloads SET position=? WHERE id=?", (below["position"], item_id))
             con.execute("UPDATE downloads SET position=? WHERE id=?", (pos, below["id"]))
 
+    def clear_history(self) -> None:
+        """Remove completed, error and canceled items."""
+        with self._connect() as con:
+            con.execute(
+                "DELETE FROM downloads WHERE status IN (?, ?, ?)",
+                (
+                    Status.COMPLETED.value,
+                    Status.ERROR.value,
+                    Status.CANCELED.value,
+                ),
+            )
+
 DB_INSTANCE = DB(CONFIG.db_file)
