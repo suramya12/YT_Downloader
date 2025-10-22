@@ -59,6 +59,49 @@ class Settings(BaseModel):
     check_updates_on_startup: bool = True  # Check for available updates
     notify_updates_available: bool = True  # Show notification when updates are available
 
+    # Quality settings (new in v2.4.0)
+    minimum_quality: str = "1080p"  # Minimum acceptable quality
+    auto_select_quality: bool = True  # Automatically select best quality
+    quality_confirmation: bool = True  # Ask confirmation for quality < 4K
+    target_quality: str = "best"  # Target quality: best, 8K, 4K, 1440p, 1080p
+
+    # FFmpeg settings (new in v2.4.0)
+    ffmpeg_path: str | None = None  # Custom FFmpeg path
+    merge_output_format: str = "mp4"  # Output format after merge: mp4, mkv, webm
+    prefer_ffmpeg_merge: bool = True  # Prefer FFmpeg merging over single-stream
+
+    # Audio extraction settings (new in v2.4.0)
+    audio_format: str = "mp3"  # Audio format: mp3, m4a, flac, wav, opus
+    audio_bitrate: str = "192"  # Audio bitrate in kbps
+    extract_audio: bool = False  # Extract audio only mode
+
+    # Subtitle settings (new in v2.4.0)
+    download_subtitles: bool = True  # Download available subtitles
+    download_auto_subs: bool = True  # Download auto-generated subtitles
+    subtitle_languages: str = "en,*"  # Comma-separated language codes, * for all
+    embed_subs_in_video: bool = True  # Embed subtitles in video file
+
+    # Network settings (new in v2.4.0)
+    proxy_url: str | None = None  # HTTP/SOCKS proxy URL
+    rate_limit: int = 0  # Rate limit in KB/s (0 = unlimited)
+    retries: int = 10  # Number of download retries
+    timeout: int = 30  # Connection timeout in seconds
+    fragment_retries: int = 10  # Fragment download retries
+
+    # Output settings (new in v2.4.0)
+    filename_template: str = "%(title)s [%(id)s].%(ext)s"  # Output filename template
+    create_subdirectories: bool = False  # Create subdirectories by uploader
+    restrict_filenames: bool = True  # Restrict to ASCII characters
+
+    # Authentication (new in v2.4.0)
+    youtube_cookies_path: str | None = None  # Path to YouTube cookies file
+    use_auth: bool = False  # Use authentication for restricted content
+
+    # UI settings (new in v2.4.0)
+    show_notifications: bool = True  # Show desktop notifications
+    minimize_to_tray: bool = False  # Minimize to system tray
+    confirm_on_exit: bool = True  # Confirm before closing with active downloads
+
 
 class Config:
     """
