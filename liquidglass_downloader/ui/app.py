@@ -1,10 +1,16 @@
+"""
+Main application window with sidebar navigation and view management.
+"""
 from __future__ import annotations
 import customtkinter as ctk
 import re
+import time
 
 from .theme import init_theme
 from ..core.config import CONFIG
 from ..core.downloader import DownloadManager
+from ..core.constants import CLIPBOARD_POLL_INTERVAL_MS, CLIPBOARD_DEBOUNCE_MS
+from ..core.validation import is_valid_url
 from .views.queue_view import QueueView
 from .views.history_view import HistoryView
 from .views.settings_view import SettingsView
@@ -53,6 +59,7 @@ class App(ctk.CTk):
 
         self._show_queue()
         self._last_clipboard = ""
+        self._last_clipboard_time = 0.0
         self.after(1200, self._tick)
 
     def _theme_changed(self, mode: str):
@@ -75,26 +82,55 @@ class App(ctk.CTk):
             self.status.configure(text="Settings")
 
     def _tick(self):
+        """
+        Main application tick for clipboard monitoring.
+
+        Runs periodically to check clipboard for video URLs when enabled.
+        """
         try:
             if CONFIG.settings.clipboard_watch:
                 self.after_idle(self._check_clipboard)
         except Exception as e:
             print(f"Error in tick: {e}")
         finally:
-            self.after(2000, self._tick)
-    
+            self.after(CLIPBOARD_POLL_INTERVAL_MS, self._tick)
+
     def _check_clipboard(self):
+        """
+        Check clipboard for video URLs with debouncing.
+
+        Implements debouncing to avoid rapid repeated notifications
+        when the same URL is detected multiple times in quick succession.
+        """
         try:
             data = self.clipboard_get()
-            if data and data != self._last_clipboard and YOUTUBE_URL_RE.search(data):
+            if not data:
+                return
+
+            # Debouncing: ignore if clipboard hasn't changed recently
+            current_time = time.time()
+            if data == self._last_clipboard:
+                # Check if enough time has passed for the same URL
+                if current_time - self._last_clipboard_time < (CLIPBOARD_DEBOUNCE_MS / 1000):
+                    return
+
+            # Check if it's a valid URL and matches video platform patterns
+            if is_valid_url(data) and YOUTUBE_URL_RE.search(data):
                 self._last_clipboard = data
+                self._last_clipboard_time = current_time
                 self._handle_clipboard_url(data)
         except Exception:
-            # Ignore clipboard errors
+            # Ignore clipboard errors (common when clipboard is locked by another app)
             pass
-    
-    def _handle_clipboard_url(self, url):
-        toast(self, "YouTube link detected. Click 'Add' in Queue.")
+
+    def _handle_clipboard_url(self, url: str):
+        """
+        Handle detected video URL from clipboard.
+
+        Args:
+            url: The detected video URL
+        """
+        toast(self, "Video link detected! Auto-filled in Queue.")
         self.queue_view.url_entry.delete(0, "end")
         self.queue_view.url_entry.insert(0, url)
 

@@ -11,7 +11,7 @@ class Toast(ctk.CTkToplevel):
         x = master.winfo_x() + master.winfo_width() - self.winfo_width() - 24
         y = master.winfo_y() + master.winfo_height() - self.winfo_height() - 24
         self.geometry(f"+{x}+{y}")
-        self.after(duration, self.destroy())
+        self.after(duration, self.destroy)
 
 def toast(master, message: str, duration=2500):
     Toast(master, message, duration)
