@@ -5,25 +5,33 @@ from __future__ import annotations
 import customtkinter as ctk
 import re
 import time
+import threading
 
 from .theme import init_theme
 from ..core.config import CONFIG
 from ..core.downloader import DownloadManager
 from ..core.constants import CLIPBOARD_POLL_INTERVAL_MS, CLIPBOARD_DEBOUNCE_MS
 from ..core.validation import is_valid_url
+from ..core.startup import initialize_application, get_startup_info
+from ..core.logging_util import get_logger
 from .views.queue_view import QueueView
 from .views.history_view import HistoryView
 from .views.settings_view import SettingsView
 from .notifier import toast
 
+log = get_logger("app")
 YOUTUBE_URL_RE = re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/")
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("LiquidGlass Downloader")
+        self.title("LiquidGlass Downloader v2.3.0")
         self.geometry("1120x680")
         init_theme(CONFIG.settings.theme)
+
+        # Perform startup initialization in background
+        self._startup_result = None
+        self._perform_startup_checks()
 
         self.dm = DownloadManager()
 
@@ -61,6 +69,73 @@ class App(ctk.CTk):
         self._last_clipboard = ""
         self._last_clipboard_time = 0.0
         self.after(1200, self._tick)
+
+        # Check startup results after a short delay
+        self.after(2000, self._check_startup_results)
+
+    def _perform_startup_checks(self):
+        """
+        Perform startup initialization in background thread.
+
+        This includes platform compatibility checks and auto-updates
+        without blocking the UI from appearing.
+        """
+        def startup_thread():
+            try:
+                log.info("Performing startup checks...")
+                self._startup_result = initialize_application(async_mode=True)
+
+                if not self._startup_result.success:
+                    log.error("Startup checks failed")
+                    for error in self._startup_result.errors:
+                        log.error(f"  - {error}")
+                else:
+                    log.info("Startup checks completed successfully")
+
+            except Exception as e:
+                log.error(f"Startup check error: {e}")
+
+        thread = threading.Thread(target=startup_thread, daemon=True)
+        thread.start()
+
+    def _check_startup_results(self):
+        """
+        Check startup results and show notifications if needed.
+
+        Called after a short delay to allow the UI to fully load.
+        """
+        if self._startup_result is None:
+            # Not ready yet, check again later
+            self.after(1000, self._check_startup_results)
+            return
+
+        # Show warnings if any
+        if self._startup_result.warnings:
+            for warning in self._startup_result.warnings[:3]:  # Limit to 3 warnings
+                toast(self, f"Warning: {warning}")
+
+        # Show update notifications
+        if self._startup_result.updates_performed:
+            updated_packages = [
+                pkg for pkg, success in self._startup_result.updates_performed.items()
+                if success
+            ]
+            if updated_packages:
+                toast(self, f"Updated: {', '.join(updated_packages)}")
+
+        # Show errors if critical
+        if self._startup_result.errors:
+            for error in self._startup_result.errors[:2]:  # Limit to 2 errors
+                toast(self, f"Error: {error}")
+
+        # Update status bar with version info
+        try:
+            info = get_startup_info()
+            platform = info.get("platform", {})
+            py_version = platform.get("python_version", "unknown")
+            self.status.configure(text=f"Ready - Python {py_version}")
+        except Exception:
+            pass
 
     def _theme_changed(self, mode: str):
         init_theme(mode)
@@ -135,8 +210,18 @@ class App(ctk.CTk):
         self.queue_view.url_entry.insert(0, url)
 
 def main():
-    app = App()
-    app.mainloop()
+    """
+    Main entry point for GUI application.
+
+    Performs platform compatibility checks before starting the GUI.
+    """
+    try:
+        log.info("Starting LiquidGlass Downloader GUI...")
+        app = App()
+        app.mainloop()
+    except Exception as e:
+        log.error(f"Fatal error in main loop: {e}")
+        raise
 
 if __name__ == "__main__":
     main()

@@ -4,23 +4,24 @@ build-backend = "hatchling.build"
 
 [project]
 name = "liquidglass-downloader"
-version = "2.2.0"
-description = "LiquidGlass YouTube Downloader — polished GUI, cards, metadata, SQLite with migration."
+version = "2.3.0"
+description = "LiquidGlass YouTube Downloader — polished GUI, cards, metadata, SQLite with migration, auto-updates."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name="You"}]
 license = {text = "MIT"}
-keywords = ["youtube", "downloader", "yt-dlp", "gui", "customtkinter"]
+keywords = ["youtube", "downloader", "yt-dlp", "gui", "customtkinter", "auto-update"]
 
 dependencies = [
-  # use a released version of yt-dlp so the project installs cleanly
-  "yt-dlp>=2024.3",
-  "pydantic>=2.5",
-  "platformdirs>=4.2",
-  "customtkinter>=5.2",
-  "Pillow>=10.2",
-  "rich>=13.7",
-  "requests>=2.32",
+  # Core dependencies - kept up to date automatically
+  "yt-dlp>=2024.12.13",        # Latest stable, auto-updated
+  "pydantic>=2.10.3",          # Latest stable with performance improvements
+  "platformdirs>=4.3.6",       # Latest stable
+  "customtkinter>=5.2.2",      # Latest stable GUI framework
+  "Pillow>=11.0.0",            # Latest stable for image processing
+  "rich>=13.9.4",              # Latest stable for CLI formatting
+  "requests>=2.32.3",          # Latest stable HTTP library
+  "packaging>=24.2",           # For version comparison in updater
 ]
 
 [project.optional-dependencies]

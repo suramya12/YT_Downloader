@@ -53,6 +53,12 @@ class Settings(BaseModel):
     browser_for_cookies: str = "chrome"  # Options: chrome, firefox, edge, opera, safari, chromium
     use_cookies_from_browser: bool = True  # Enable browser cookies by default
 
+    # Auto-update settings (new in v2.3.0)
+    auto_update_enabled: bool = True  # Enable automatic updates on startup
+    auto_update_ytdlp_only: bool = True  # Only auto-update critical packages (yt-dlp)
+    check_updates_on_startup: bool = True  # Check for available updates
+    notify_updates_available: bool = True  # Show notification when updates are available
+
 
 class Config:
     """
