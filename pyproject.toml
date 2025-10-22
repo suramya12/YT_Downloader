@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "liquidglass-downloader"
-version = "2.3.0"
-description = "LiquidGlass YouTube Downloader — polished GUI, cards, metadata, SQLite with migration, auto-updates."
+version = "2.4.0"
+description = "LiquidGlass YouTube Downloader — optimized performance, intelligent caching, auto-updates, polished GUI."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name="You"}]
