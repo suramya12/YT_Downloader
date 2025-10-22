@@ -1,3 +1,12 @@
+"""
+Configuration management using Pydantic for validation and type safety.
+
+This module handles application settings persistence and provides:
+- Cross-platform configuration directories using platformdirs
+- Type-safe settings with Pydantic validation
+- Automatic settings migration and defaults
+- JSON-based configuration storage
+"""
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from platformdirs import user_config_dir, user_data_dir
@@ -9,6 +18,12 @@ APP_AUTHOR = "LiquidGlass"
 
 
 class Settings(BaseModel):
+    """
+    Application settings with validation and type safety.
+
+    All settings are persisted to a JSON configuration file and loaded
+    on application startup. Pydantic ensures type safety and validation.
+    """
     download_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads"))
     concurrent_downloads: int = 3
     format: str = (
@@ -40,6 +55,16 @@ class Settings(BaseModel):
 
 
 class Config:
+    """
+    Configuration manager with cross-platform directory support.
+
+    Automatically creates necessary directories for:
+    - Configuration files (settings.json)
+    - Data files (downloads.sqlite3)
+    - Thumbnails cache
+    - Log files
+    """
+
     def __init__(self) -> None:
         self.config_dir = Path(user_config_dir(APP_NAME, APP_AUTHOR))
         self.data_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
@@ -54,6 +79,15 @@ class Config:
         self.settings = self._load()
 
     def _load(self) -> Settings:
+        """
+        Load settings from configuration file.
+
+        If the file doesn't exist or is corrupted, creates a new
+        settings file with default values.
+
+        Returns:
+            Loaded or default Settings object
+        """
         if self.config_file.exists():
             try:
                 return Settings(
@@ -66,6 +100,16 @@ class Config:
         return s
 
     def save(self, settings: Settings) -> None:
+        """
+        Save settings to configuration file.
+
+        Args:
+            settings: Settings object to persist
+
+        Side Effects:
+            - Writes settings to JSON file with pretty-printing
+            - Updates self.settings with the new settings
+        """
         self.config_file.write_text(
             settings.model_dump_json(indent=2), encoding="utf-8"
         )
