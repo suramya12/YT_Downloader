@@ -17,8 +17,11 @@ from .core.db import DB_INSTANCE as DB
 from .core.models import Status
 from .core.validation import validate_urls, URLValidationError
 from .core.constants import MIN_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS
+from .core.startup import quick_startup, get_startup_info, initialize_application
+from .core.logging_util import get_logger
 
 console = Console()
+log = get_logger("cli")
 
 
 def main(argv=None):
@@ -68,8 +71,49 @@ Examples:
         action="store_true",
         help="Enable verbose output"
     )
+    p.add_argument(
+        "--skip-updates",
+        action="store_true",
+        help="Skip auto-updates on startup"
+    )
+    p.add_argument(
+        "--version",
+        action="store_true",
+        help="Show version and platform information"
+    )
 
     args = p.parse_args(argv)
+
+    # Handle version request
+    if args.version:
+        info = get_startup_info()
+        console.print(f"[cyan]LiquidGlass Downloader v{info.get('app_version', '2.3.0')}[/cyan]")
+        platform = info.get("platform", {})
+        console.print(f"Platform: {platform.get('system', 'unknown')}")
+        console.print(f"Python: {platform.get('python_version', 'unknown')}")
+        console.print(f"Architecture: {platform.get('architecture', 'unknown')}")
+        return
+
+    # Perform startup checks
+    console.print("[cyan]Initializing...[/cyan]")
+    if args.skip_updates:
+        if not quick_startup():
+            console.print("[red]Startup checks failed. Please check logs.[/red]")
+            sys.exit(1)
+    else:
+        result = initialize_application(async_mode=False)
+        if not result.success:
+            console.print("[red]Startup checks failed:[/red]")
+            for error in result.errors:
+                console.print(f"  [red]✗[/red] {error}")
+            sys.exit(1)
+
+        if result.updates_performed:
+            console.print("[green]Auto-updates completed:[/green]")
+            for pkg, success in result.updates_performed.items():
+                status = "✓" if success else "✗"
+                console.print(f"  [{status}] {pkg}")
+            console.print()
 
     # Validate URLs first
     if not args.no_validate:
